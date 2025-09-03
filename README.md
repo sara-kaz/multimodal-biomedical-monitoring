@@ -366,11 +366,11 @@ wandb.config.update(hyperparameters)
 
 ### **Citation**
 ```bibtex
-@mastersthesis{your2024edge,
+@mastersthesis{your2025edge,
   title={Edge Intelligence for Multimodal Biomedical Monitoring: A Wearable Sensor-Fusion System on ESP32-S3},
-  author={Your Name},
-  school={Your University},
-  year={2024},
+  author={Sara Aly},
+  school={California State University, Northridge},
+  year={2025},
   type={Master's Thesis}
 }
 ```

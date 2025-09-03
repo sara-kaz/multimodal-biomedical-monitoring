@@ -49,7 +49,7 @@ The project integrates and standardizes three major biomedical datasets:
 │   Wearable      │    │   ESP32-S3       │    │   Mobile App    │
 │   Sensors       │    │   Edge AI        │    │   Dashboard     │
 │                 │    │                  │    │                 │
-│ ├─ ECG          │───▶│ ├─ Preprocessing  │───▶│ ├─ Heart Health │
+│ ├─ ECG          │───▶│ ├─ Preprocessing │───▶│ ├─ Heart Health │
 │ ├─ PPG          │    │ ├─ CNN/Trans-Lite│    │ ├─ Stress Level │
 │ └─ IMU (3-axis) │    │ └─ Multi-task ML │    │ └─ Activity     │
 └─────────────────┘    └──────────────────┘    └─────────────────┘

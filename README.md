@@ -6,8 +6,7 @@ This guide helps you combine and standardize PPG-DaLiA, MIT-BIH Arrhythmia, and 
 
 ### Required Python Packages
 ```bash
-pip install numpy pandas scipy matplotlib seaborn scikit-learn torch
-pip install h5py pickle pathlib wfdb  # wfdb for MIT-BIH processing
+pip install requirements.txt
 ```
 
 ### Dataset Requirements

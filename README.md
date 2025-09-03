@@ -184,32 +184,5 @@ activity_dataset = MultimodalBiomedicalDataset(train_data, label_type='activity'
 - **Batch process** signals to reduce memory usage
 - **Pre-filter** samples by quality metrics
 
-## 📚 Next Steps for Your Thesis
-
-### Model Architecture Recommendations
-1. **1D CNN**: Excellent for time-series feature extraction
-2. **Transformer-Lite**: Attention for multi-modal fusion
-3. **MobileNet-inspired**: Depthwise separable convolutions for efficiency
-4. **Quantization**: INT8 quantization for ESP32-S3 deployment
-
-### Evaluation Metrics
-- **Arrhythmia Detection**: Sensitivity, Specificity, F1-score per class
-- **Stress Recognition**: Accuracy, Confusion matrix, ROC-AUC
-- **Activity Recognition**: Multi-class accuracy, Per-class precision/recall
-- **Edge Performance**: Inference time, Memory usage, Power consumption
-
-### Publication Ready Features
-- **Cross-subject validation**: Subject-independent evaluation
-- **Statistical significance**: Paired t-tests, confidence intervals
-- **Ablation studies**: Single vs. multi-modal performance
-- **Real-world validation**: Performance degradation analysis
-
-## 💡 Tips for Success
-
-1. **Start Small**: Process one dataset first, then combine
-2. **Validate Early**: Check signal quality before training
-3. **Monitor Memory**: ESP32-S3 has limited RAM (512KB)
-4. **Edge-First Design**: Always consider deployment constraints
-5. **Document Everything**: Keep detailed processing logs
 
 This integrated pipeline provides a solid foundation for your edge intelligence research. The standardized format ensures compatibility across datasets while maintaining the flexibility needed for advanced neural network architectures.

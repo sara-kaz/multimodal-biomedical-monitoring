@@ -588,7 +588,7 @@ if __name__ == "__main__":
     # Process all datasets - UPDATE THESE PATHS
     dataset_paths = {
         'ppg_dalia_path': '/path/to/PPG_DaLiA',
-        'mit_bih_path': '/path/to/mit-bih-arrhythmia-database', 
+        'mit_bih_path': '/Users/HP/Desktop/University/Thesis/Code/data/mit-bih-arrhythmia-database-1.0.0', 
         'wesad_path': '/path/to/WESAD'
     }
     

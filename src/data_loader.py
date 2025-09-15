@@ -1,4 +1,5 @@
 """
+#1
 Data Loader and Analyzer for Processed Multimodal Biomedical Datasets
 For Edge Intelligence Wearable Sensor-Fusion System
 """
@@ -83,10 +84,119 @@ class DatasetAnalyzer:
         """Load processed data"""
         with open(self.data_file_path, 'rb') as f:
             data = pickle.load(f)
-        
-        self.processed_data = data['processed_data']
-        self.summary = data['summary']
-        print(f"Loaded {len(self.processed_data)} processed samples")
+
+        # Support two formats:
+        # 1) Legacy dict with keys 'processed_data' and 'summary'
+        # 2) Unified dataset list saved by dataset_integration.py (with metadata in sibling file)
+        if isinstance(data, dict) and 'processed_data' in data and 'summary' in data:
+            self.processed_data = data['processed_data']
+            self.summary = data['summary']
+            print(f"Loaded {len(self.processed_data)} processed samples")
+            return
+
+        if isinstance(data, list):
+            # Attempt to adapt unified dataset format to the analyzer's expected schema
+            unified_samples = data
+
+            # Try to load metadata for channel mapping and label encodings
+            metadata_path = self.data_file_path.parent / 'dataset_metadata.pkl'
+            channel_mapping = {'ecg': 0, 'ppg': 1, 'accel_x': 2, 'accel_y': 3, 'accel_z': 4}
+            label_encodings = {
+                'activity': {'sitting': 0, 'walking': 1, 'cycling': 2, 'driving': 3, 'working': 4, 'stairs': 5, 'table_soccer': 6, 'lunch': 7},
+                'stress': {'baseline': 0, 'stress': 1, 'amusement': 2, 'meditation': 3},
+                'arrhythmia': {'normal': 0, 'abnormal': 1}
+            }
+            sampling_rate_hz = 100
+            window_length_sec = 10
+
+            if metadata_path.exists():
+                with open(metadata_path, 'rb') as mf:
+                    meta = pickle.load(mf)
+                channel_mapping = meta.get('channel_mapping', channel_mapping)
+                label_encodings = meta.get('label_encodings', label_encodings)
+                fmt = meta.get('format', {})
+                sampling_rate_hz = fmt.get('sampling_rate_hz', sampling_rate_hz)
+                window_length_sec = fmt.get('window_length_sec', window_length_sec)
+
+            # Invert label encodings for decoding one-hot
+            inverse_label_maps = {
+                task: {idx: name for name, idx in enc_map.items()}
+                for task, enc_map in label_encodings.items()
+            }
+
+            # Build processed_data compatible with analyzer
+            processed = []
+            for sample in unified_samples:
+                window_data = sample.get('window_data')  # [C, T]
+                if window_data is None:
+                    continue
+
+                # Extract per-signal arrays using channel mapping
+                signals = {}
+                try:
+                    for sig_name, ch_idx in channel_mapping.items():
+                        if 0 <= ch_idx < window_data.shape[0]:
+                            sig_array = window_data[ch_idx, :]
+                            # Keep as 1D numpy array
+                            signals[sig_name] = sig_array
+                        else:
+                            signals[sig_name] = None
+                except Exception:
+                    # If shape unexpected, skip sample
+                    continue
+
+                # Decode one-hot labels to class names when possible
+                labels_out = {}
+                labels_in = sample.get('labels', {})
+                for task, one_hot in labels_in.items():
+                    try:
+                        if one_hot is None:
+                            labels_out[task] = None
+                        else:
+                            one_hot_arr = np.array(one_hot)
+                            if np.sum(one_hot_arr) > 0:
+                                cls_idx = int(np.argmax(one_hot_arr))
+                                labels_out[task] = inverse_label_maps.get(task, {}).get(cls_idx, str(cls_idx))
+                            else:
+                                labels_out[task] = None
+                    except Exception:
+                        labels_out[task] = None
+
+                processed.append({
+                    'signals': signals,
+                    'labels': labels_out,
+                    'subject_id': sample.get('subject_id', 'unknown'),
+                    'dataset': sample.get('dataset', 'unknown'),
+                    'sampling_rates': {
+                        'ecg': sampling_rate_hz,
+                        'ppg': sampling_rate_hz,
+                        'accel': sampling_rate_hz,
+                        'accel_x': sampling_rate_hz,
+                        'accel_y': sampling_rate_hz,
+                        'accel_z': sampling_rate_hz
+                    },
+                    'window_index': sample.get('window_index', 0),
+                    'start_time': sample.get('start_time', 0.0),
+                })
+
+            # Create a minimal summary compatible with analyzer expectations
+            self.processed_data = processed
+            self.summary = {
+                'label_types': list(label_encodings.keys()),
+                'signal_types': list(channel_mapping.keys()),
+                'sampling_rates': {'ecg': sampling_rate_hz, 'ppg': sampling_rate_hz, 'accel': sampling_rate_hz},
+                'processing_params': {
+                    'window_length_sec': window_length_sec,
+                    'sampling_rate_hz': sampling_rate_hz
+                }
+            }
+            print(f"Loaded {len(self.processed_data)} processed samples (adapted from unified format)")
+            return
+
+        # If neither format matched, raise a helpful error
+        raise TypeError(
+            "Unsupported dataset file format. Expected a dict with 'processed_data'/'summary' or a list of unified samples."
+        )
     
     def analyze_signal_quality(self, max_samples=10):
         """Analyze signal quality metrics"""
@@ -206,7 +316,13 @@ class DatasetAnalyzer:
             axes[i].grid(True, alpha=0.3)
         
         plt.tight_layout()
-        plt.show()
+        # Save plot instead of showing to avoid blocking in headless/non-GUI envs
+        plots_dir = Path('plots')
+        plots_dir.mkdir(exist_ok=True)
+        out_path = plots_dir / f'sample_signals_{sample_idx}.png'
+        fig.savefig(out_path, dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        print(f"Saved plot to: {out_path}")
     
     def create_dataset_splits(self, test_size=0.2, val_size=0.1, random_state=42):
         """Create train/validation/test splits with subject-wise splitting"""
@@ -370,7 +486,18 @@ def create_data_loaders(processed_data, batch_size=32, num_workers=4):
 if __name__ == "__main__":
     
     # Load and analyze processed data
-    analyzer = DatasetAnalyzer('processed_datasets/combined_windowed_data.pkl')
+    from pathlib import Path as _Path
+    _here = _Path(__file__).resolve()
+    _candidates = [
+        _Path('processed_unified_dataset/unified_dataset.pkl'),
+        _here.parent.parent.parent / 'processed_unified_dataset' / 'unified_dataset.pkl',  # /Code/processed_unified_dataset
+        _here.parent.parent.parent.parent / 'processed_unified_dataset' / 'unified_dataset.pkl',
+        _Path('/Users/HP/Desktop/University/Thesis/Code/processed_unified_dataset/unified_dataset.pkl'),
+        _Path('/Users/HP/Desktop/University/Thesis/processed_unified_dataset/unified_dataset.pkl'),
+        _Path('/Users/HP/Desktop/University/Thesis/Code/multimodal-biomedical-monitoring/processed_unified_dataset/unified_dataset.pkl')
+    ]
+    _data_path = next((p for p in _candidates if p.exists()), _candidates[-1])
+    analyzer = DatasetAnalyzer(str(_data_path))
     
     # Analyze signal quality
     quality_df = analyzer.analyze_signal_quality()

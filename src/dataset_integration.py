@@ -1,4 +1,5 @@
 """
+#2
 Multimodal Biomedical Dataset Integration Pipeline
 Following Exact Specifications for Edge Intelligence Thesis Project
 
@@ -171,7 +172,11 @@ class UnifiedBiomedicalDataProcessor:
         all_windows = []
         data_path = Path(data_path)
         
-        for pkl_file in data_path.glob("S*.pkl"):
+        print(f"Looking for files in: {data_path}")
+        pkl_files = list(data_path.glob("S*/S*.pkl"))
+        print(f"Found {len(pkl_files)} PKL files")
+        
+        for pkl_file in pkl_files:
             subject_id = pkl_file.stem
             print(f"  Processing {subject_id}")
             
@@ -226,7 +231,7 @@ class UnifiedBiomedicalDataProcessor:
                     
                     for idx in window_activity_indices:
                         if idx < len(activity_labels):
-                            activity_code = activity_labels[idx]
+                            activity_code = int(activity_labels[idx])  # Convert to int
                             if activity_code in activity_mapping:
                                 window_activities.append(activity_mapping[activity_code])
                     
@@ -264,7 +269,7 @@ class UnifiedBiomedicalDataProcessor:
     
     def process_mit_bih(self, data_path):
         """Process MIT-BIH Arrhythmia Dataset"""
-        print("📊 Processing MIT-BIH Arrhythmia Dataset...")
+        print("Processing MIT-BIH Arrhythmia Dataset...")
         
         all_windows = []
         data_path = Path(data_path)
@@ -356,12 +361,16 @@ class UnifiedBiomedicalDataProcessor:
     
     def process_wesad(self, data_path):
         """Process WESAD Dataset"""
-        print("📊 Processing WESAD Dataset...")
+        print("Processing WESAD Dataset...")
         
         all_windows = []
         data_path = Path(data_path)
         
-        for pkl_file in data_path.glob("S*.pkl"):
+        print(f"Looking for files in: {data_path}")
+        pkl_files = list(data_path.glob("S*/S*.pkl"))
+        print(f"Found {len(pkl_files)} PKL files")
+        
+        for pkl_file in pkl_files:
             subject_id = pkl_file.stem
             print(f"  Processing {subject_id}")
             
@@ -461,11 +470,11 @@ class UnifiedBiomedicalDataProcessor:
                 }
         """
         
-        print("🚀 Starting Unified Dataset Creation...")
-        print(f"📋 Target Format: {self.N_CHANNELS} channels × {self.WINDOW_SAMPLES} samples")
-        print(f"📋 Sampling Rate: {self.TARGET_FS} Hz")
-        print(f"📋 Window Length: {self.WINDOW_LENGTH} seconds")
-        print(f"📋 Overlap: {self.OVERLAP * 100}%")
+        print("Starting Unified Dataset Creation...")
+        print(f"- Target Format: {self.N_CHANNELS} channels × {self.WINDOW_SAMPLES} samples")
+        print(f"- Sampling Rate: {self.TARGET_FS} Hz")
+        print(f"- Window Length: {self.WINDOW_LENGTH} seconds")
+        print(f"- Overlap: {self.OVERLAP * 100}%")
         
         all_windows = []
         
@@ -500,7 +509,7 @@ class UnifiedBiomedicalDataProcessor:
         with open(save_path, 'wb') as f:
             pickle.dump(unified_dataset, f)
         
-        print(f"💾 Unified dataset saved: {save_path}")
+        print(f"✅ Unified dataset saved: {save_path}")
         
         # Save metadata
         metadata = {
@@ -566,7 +575,7 @@ class UnifiedBiomedicalDataProcessor:
                             break
         
         # Print summary
-        print(f"\n📊 DATASET SUMMARY")
+        print(f"\n--- DATASET SUMMARY ---")
         print(f"Total Windows: {summary['total_windows']}")
         print(f"Total Subjects: {len(summary['subjects'])}")
         
@@ -587,9 +596,9 @@ if __name__ == "__main__":
     
     # Process all datasets - UPDATE THESE PATHS
     dataset_paths = {
-        'ppg_dalia_path': '/path/to/PPG_DaLiA',
+        'ppg_dalia_path': '/Users/HP/Desktop/University/Thesis/Code/data/ppg+dalia/PPG_FieldStudy',
         'mit_bih_path': '/Users/HP/Desktop/University/Thesis/Code/data/mit-bih-arrhythmia-database-1.0.0', 
-        'wesad_path': '/path/to/WESAD'
+        'wesad_path': '/Users/HP/Desktop/University/Thesis/Code/data/WESAD'
     }
     
     # Create unified dataset

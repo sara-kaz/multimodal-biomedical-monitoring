@@ -1,4 +1,5 @@
 """
+#3
 Unified Dataset Class
 PyTorch Dataset class for the unified multimodal biomedical data
 
@@ -50,7 +51,7 @@ class UnifiedBiomedicalDataset(Dataset):
         self._filter_samples()
         
         print(f"✅ Loaded {len(self.valid_samples)} samples")
-        print(f"📊 Tasks: {self.task_types}")
+        print(f"- Tasks: {self.task_types}")
         self._print_task_statistics()
     
     def _load_data(self):
@@ -112,7 +113,7 @@ class UnifiedBiomedicalDataset(Dataset):
         """Print statistics for each task"""
         
         for task in self.task_types:
-            print(f"\n📋 {task.upper()} Task Statistics:")
+            print(f"\n {task.upper()} Task Statistics:")
             
             task_counts = {}
             valid_samples = 0
@@ -315,7 +316,7 @@ class UnifiedBiomedicalDataset(Dataset):
         for subject in test_subjects:
             test_indices.extend(subject_samples[subject])
         
-        print(f"📊 Subject-wise splits:")
+        print(f"- Subject-wise splits:")
         print(f"  Train: {len(train_indices)} samples from {len(train_subjects)} subjects")
         print(f"  Val:   {len(val_indices)} samples from {len(val_subjects)} subjects") 
         print(f"  Test:  {len(test_indices)} samples from {len(test_subjects)} subjects")
@@ -358,7 +359,7 @@ def analyze_batch(batch, dataset):
     signals = batch['signals']      # [batch_size, 5, 1000]
     channel_mask = batch['channel_mask']  # [batch_size, 5]
     
-    print(f"📊 Batch Analysis:")
+    print(f"- Batch Analysis:")
     print(f"  Signals shape: {signals.shape}")
     print(f"  Channel availability: {channel_mask.float().mean(dim=0)}")  # Per-channel availability
     
@@ -396,7 +397,7 @@ if __name__ == "__main__":
     data_loaders = create_data_loaders(dataset, split_indices, batch_size=16)
     
     # Test the DataLoaders
-    print(f"\n🧪 Testing DataLoaders...")
+    print(f"\n Testing DataLoaders...")
     
     for split_name, loader in data_loaders.items():
         print(f"\n--- {split_name.upper()} SET ---")
@@ -408,11 +409,11 @@ if __name__ == "__main__":
                 break
     
     # Plot sample
-    print(f"\n📊 Plotting sample...")
+    print(f"\n Plotting sample...")
     dataset.plot_sample(0)
     
     # Show task information
-    print(f"\n📋 Task Information:")
+    print(f"\n Task Information:")
     for task in dataset.task_types:
         info = dataset.get_task_info(task)
         if info:

@@ -1,5 +1,5 @@
 """
-#2
+#1
 Multimodal Biomedical Dataset Integration Pipeline
 Following Exact Specifications for Edge Intelligence Thesis Project
 
@@ -39,9 +39,15 @@ class UnifiedBiomedicalDataProcessor:
             'ppg': 1, 
             'accel_x': 2,
             'accel_y': 3,
-            'accel_z': 4
+            'accel_z': 4,
+            'eda': 5,
+            'respiration': 6,
+            'temperature': 7,
+            'emg': 8,
+            'eda_wrist': 9,
+            'temperature_wrist': 10
         }
-        self.N_CHANNELS = 5
+        self.N_CHANNELS = 11  # 5 original + 6 additional WESAD signals
         
         # Label encodings (one-hot)
         self.LABEL_ENCODINGS = {
@@ -192,6 +198,27 @@ class UnifiedBiomedicalDataProcessor:
                 ecg_raw = subject_data['signal']['chest']['ECG'].flatten()
                 ecg_resampled = self.resample_signal(ecg_raw, 64)
                 signals['ecg'] = self.normalize_signal(ecg_resampled)
+                
+                # Additional PPG-DaLiA signals from chest (64 Hz)
+                if 'EDA' in subject_data['signal']['chest']:
+                    eda_raw = subject_data['signal']['chest']['EDA'].flatten()
+                    eda_resampled = self.resample_signal(eda_raw, 64)
+                    signals['eda'] = self.normalize_signal(eda_resampled)
+                
+                if 'Resp' in subject_data['signal']['chest']:
+                    resp_raw = subject_data['signal']['chest']['Resp'].flatten()
+                    resp_resampled = self.resample_signal(resp_raw, 64)
+                    signals['respiration'] = self.normalize_signal(resp_resampled)
+                
+                if 'Temp' in subject_data['signal']['chest']:
+                    temp_raw = subject_data['signal']['chest']['Temp'].flatten()
+                    temp_resampled = self.resample_signal(temp_raw, 64)
+                    signals['temperature'] = self.normalize_signal(temp_resampled)
+                
+                if 'EMG' in subject_data['signal']['chest']:
+                    emg_raw = subject_data['signal']['chest']['EMG'].flatten()
+                    emg_resampled = self.resample_signal(emg_raw, 64)
+                    signals['emg'] = self.normalize_signal(emg_resampled)
             
             # PPG from wrist (64 Hz) 
             ppg_raw = subject_data['signal']['wrist']['BVP'].flatten()
@@ -207,6 +234,17 @@ class UnifiedBiomedicalDataProcessor:
             signals['accel_x'] = self.normalize_signal(acc_x_resampled)
             signals['accel_y'] = self.normalize_signal(acc_y_resampled)
             signals['accel_z'] = self.normalize_signal(acc_z_resampled)
+            
+            # Additional PPG-DaLiA signals from wrist (32 Hz)
+            if 'EDA' in subject_data['signal']['wrist']:
+                eda_wrist_raw = subject_data['signal']['wrist']['EDA'].flatten()
+                eda_wrist_resampled = self.resample_signal(eda_wrist_raw, 32)
+                signals['eda_wrist'] = self.normalize_signal(eda_wrist_resampled)
+            
+            if 'TEMP' in subject_data['signal']['wrist']:
+                temp_wrist_raw = subject_data['signal']['wrist']['TEMP'].flatten()
+                temp_wrist_resampled = self.resample_signal(temp_wrist_raw, 32)
+                signals['temperature_wrist'] = self.normalize_signal(temp_wrist_resampled)
             
             # Extract activity labels
             activity_labels = subject_data.get('activity', None)
@@ -402,6 +440,38 @@ class UnifiedBiomedicalDataProcessor:
             signals['accel_x'] = self.normalize_signal(acc_x_resampled)
             signals['accel_y'] = self.normalize_signal(acc_y_resampled)
             signals['accel_z'] = self.normalize_signal(acc_z_resampled)
+            
+            # Additional WESAD signals from chest (700 Hz)
+            if 'EDA' in chest_data:
+                eda_raw = chest_data['EDA'].flatten()
+                eda_resampled = self.resample_signal(eda_raw, 700)
+                signals['eda'] = self.normalize_signal(eda_resampled)
+            
+            if 'Resp' in chest_data:
+                resp_raw = chest_data['Resp'].flatten()
+                resp_resampled = self.resample_signal(resp_raw, 700)
+                signals['respiration'] = self.normalize_signal(resp_resampled)
+            
+            if 'Temp' in chest_data:
+                temp_raw = chest_data['Temp'].flatten()
+                temp_resampled = self.resample_signal(temp_raw, 700)
+                signals['temperature'] = self.normalize_signal(temp_resampled)
+            
+            if 'EMG' in chest_data:
+                emg_raw = chest_data['EMG'].flatten()
+                emg_resampled = self.resample_signal(emg_raw, 700)
+                signals['emg'] = self.normalize_signal(emg_resampled)
+            
+            # Additional WESAD signals from wrist (32 Hz)
+            if 'EDA' in wrist_data:
+                eda_wrist_raw = wrist_data['EDA'].flatten()
+                eda_wrist_resampled = self.resample_signal(eda_wrist_raw, 32)
+                signals['eda_wrist'] = self.normalize_signal(eda_wrist_resampled)
+            
+            if 'TEMP' in wrist_data:
+                temp_wrist_raw = wrist_data['TEMP'].flatten()
+                temp_wrist_resampled = self.resample_signal(temp_wrist_raw, 32)
+                signals['temperature_wrist'] = self.normalize_signal(temp_wrist_resampled)
             
             # Extract stress labels (700 Hz)
             stress_labels_raw = subject_data['label'].flatten()

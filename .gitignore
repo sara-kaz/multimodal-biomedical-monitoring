@@ -1,0 +1,46 @@
+# Large dataset files (too big for GitHub)
+processed_unified_dataset/*.pkl
+*.pkl
+
+# Large export files
+output.csv
+output.xlsx
+exports/
+
+# Plot files (can be regenerated)
+plots/*.png
+plots/*.jpg
+plots/*.jpeg
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp

@@ -1,5 +1,5 @@
 """
-#1
+#2
 Data Loader and Analyzer for Processed Multimodal Biomedical Datasets
 For Edge Intelligence Wearable Sensor-Fusion System
 """
@@ -18,7 +18,7 @@ from torch.utils.data import Dataset, DataLoader
 class MultimodalBiomedicalDataset(Dataset):
     """PyTorch Dataset for multimodal biomedical data"""
     
-    def __init__(self, processed_data, signal_types=['ecg', 'ppg', 'accel_x', 'accel_y', 'accel_z'], 
+    def __init__(self, processed_data, signal_types=['ecg', 'ppg', 'accel_x', 'accel_y', 'accel_z', 'eda', 'respiration', 'temperature', 'emg', 'eda_wrist', 'temperature_wrist'], 
                  label_type='stress', normalize_per_sample=True):
         self.data = processed_data
         self.signal_types = signal_types
@@ -100,7 +100,7 @@ class DatasetAnalyzer:
 
             # Try to load metadata for channel mapping and label encodings
             metadata_path = self.data_file_path.parent / 'dataset_metadata.pkl'
-            channel_mapping = {'ecg': 0, 'ppg': 1, 'accel_x': 2, 'accel_y': 3, 'accel_z': 4}
+            channel_mapping = {'ecg': 0, 'ppg': 1, 'accel_x': 2, 'accel_y': 3, 'accel_z': 4, 'eda': 5, 'respiration': 6, 'temperature': 7, 'emg': 8, 'eda_wrist': 9, 'temperature_wrist': 10}
             label_encodings = {
                 'activity': {'sitting': 0, 'walking': 1, 'cycling': 2, 'driving': 3, 'working': 4, 'stairs': 5, 'table_soccer': 6, 'lunch': 7},
                 'stress': {'baseline': 0, 'stress': 1, 'amusement': 2, 'meditation': 3},
@@ -173,7 +173,13 @@ class DatasetAnalyzer:
                         'accel': sampling_rate_hz,
                         'accel_x': sampling_rate_hz,
                         'accel_y': sampling_rate_hz,
-                        'accel_z': sampling_rate_hz
+                        'accel_z': sampling_rate_hz,
+                        'eda': sampling_rate_hz,
+                        'respiration': sampling_rate_hz,
+                        'temperature': sampling_rate_hz,
+                        'emg': sampling_rate_hz,
+                        'eda_wrist': sampling_rate_hz,
+                        'temperature_wrist': sampling_rate_hz
                     },
                     'window_index': sample.get('window_index', 0),
                     'start_time': sample.get('start_time', 0.0),

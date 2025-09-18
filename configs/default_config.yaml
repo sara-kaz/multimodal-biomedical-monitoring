@@ -1,0 +1,105 @@
+# Default Configuration for Edge Intelligence Multimodal Biomedical Monitoring
+# Optimized for ESP32-S3 deployment
+
+# Model Configuration
+model:
+  type: cnn_transformer_lite
+  n_channels: 11  # ECG, PPG, 3xACC, EDA, Resp, Temp, EMG, EDA_wrist, Temp_wrist
+  n_samples: 1000  # 10 seconds at 100Hz
+  d_model: 64  # Reduced for edge deployment
+  nhead: 4  # Reduced attention heads
+  num_layers: 2  # Minimal transformer layers
+  dim_feedforward: 128  # Reduced FFN dimension
+  dropout: 0.1
+
+# Task Configurations
+tasks:
+  activity:
+    num_classes: 8
+    weight: 1.0
+    classes: [sitting, walking, cycling, driving, working, stairs, table_soccer, lunch]
+  
+  stress:
+    num_classes: 4
+    weight: 1.0
+    classes: [baseline, stress, amusement, meditation]
+  
+  arrhythmia:
+    num_classes: 2
+    weight: 1.0
+    classes: [normal, abnormal]
+
+# Training Configuration
+training:
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.001
+  loss_type: cross_entropy  # cross_entropy, focal, label_smoothing
+  optimizer_type: adamw  # adam, adamw, sgd, rmsprop
+  scheduler_type: cosine  # cosine, step, plateau, warmup_cosine
+  weight_decay: 0.0001
+  warmup_epochs: 5
+  gradient_clip_norm: 1.0
+  early_stopping_patience: 20
+  early_stopping_min_delta: 0.0001
+
+# Data Configuration
+data:
+  signal_types: [ecg, ppg, accel_x, accel_y, accel_z, eda, respiration, temperature, emg, eda_wrist, temperature_wrist]
+  normalize_per_sample: true
+  augment_train: true
+  test_size: 0.2
+  val_size: 0.1
+  random_state: 42
+
+# Model Compression for ESP32-S3
+compression:
+  quantization:
+    enabled: true
+    bits: 8
+    type: dynamic  # dynamic, static
+    target_modules: [Linear, Conv1d]
+  
+  pruning:
+    enabled: true
+    ratio: 0.3
+    type: magnitude  # magnitude, random, structured
+    target_modules: [Linear, Conv1d]
+  
+  knowledge_distillation:
+    enabled: false
+    teacher_model_path: null
+    temperature: 3.0
+    alpha: 0.7
+
+# ESP32-S3 Deployment Configuration
+deployment:
+  target_platform: esp32_s3
+  input_shape: [1, 11, 1000]
+  max_model_size_mb: 0.5
+  max_inference_time_ms: 100
+  quantization_bits: 8
+  export_format: onnx  # onnx, tflite, cpp
+
+# Evaluation Configuration
+evaluation:
+  metrics: [accuracy, precision, recall, f1, auc]
+  save_predictions: true
+  plot_confusion_matrices: true
+  plot_roc_curves: true
+  benchmark_inference: true
+
+# Logging Configuration
+logging:
+  log_level: INFO
+  save_tensorboard: true
+  save_wandb: false
+  wandb_project: multimodal-biomedical-monitoring
+  log_frequency: 10  # Log every N batches
+
+# Hardware Configuration
+hardware:
+  device: auto  # auto, cpu, cuda
+  num_workers: 4
+  pin_memory: true
+  mixed_precision: false  # Enable for faster training on compatible hardware

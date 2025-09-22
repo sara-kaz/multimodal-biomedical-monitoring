@@ -6,10 +6,21 @@ Includes quantization, pruning, and knowledge distillation
 import torch
 import torch.nn as nn
 import torch.nn.utils.prune as prune
-from torch.quantization import quantize_dynamic, quantize_static
+try:
+    from torch.quantization import quantize_dynamic
+    from torch.quantization import quantize_static
+except ImportError:
+    try:
+        from torch.ao.quantization import quantize_dynamic
+        from torch.ao.quantization import quantize_static
+    except ImportError:
+        # Fallback for older PyTorch versions
+        quantize_dynamic = None
+        quantize_static = None
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Union
 import copy
+from pathlib import Path
 
 
 class ModelCompressor:

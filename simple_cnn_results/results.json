@@ -1,0 +1,6 @@
+{
+  "train_accuracy": 0.0,
+  "val_accuracy": 94.70886354872474,
+  "test_accuracy": 94.4113920564094,
+  "model_parameters": 63630
+}

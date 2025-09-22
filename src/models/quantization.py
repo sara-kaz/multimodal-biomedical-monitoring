@@ -10,6 +10,12 @@ from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 import copy
 
+# Handle PyTorch version differences
+try:
+    from torch.quantization import quantize_dynamic, quantize_static
+except ImportError:
+    from torch.ao.quantization import quantize_dynamic, quantize_static
+
 
 class QuantizedLinear(nn.Module):
     """Quantized Linear layer for ESP32-S3 deployment"""

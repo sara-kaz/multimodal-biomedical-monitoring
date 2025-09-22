@@ -1,0 +1,36 @@
+{
+  "training_history": {
+    "train_loss": [
+      4.152769088745117,
+      0.0,
+      0.0
+    ],
+    "val_loss": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "train_accuracy": [
+      0.14583333333333334,
+      0.0,
+      0.0
+    ],
+    "val_accuracy": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "epoch_times": [
+      42.83299779891968,
+      40.70044994354248,
+      40.82677912712097
+    ]
+  },
+  "final_metrics": {
+    "train_accuracy": 0.0,
+    "val_accuracy": 0.0,
+    "test_accuracy": 0.0,
+    "total_parameters": 116337,
+    "model_size_mb": 0.4437904357910156
+  }
+}

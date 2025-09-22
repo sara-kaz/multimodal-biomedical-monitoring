@@ -1,301 +1,402 @@
 #!/usr/bin/env python3
 """
-Main Training Script for Edge Intelligence Multimodal Biomedical Monitoring
-Trains CNN/Transformer-Lite models for simultaneous biomedical signal classification
+Comprehensive Training Script for Multimodal Biomedical Monitoring
+Trains CNN/Transformer models on combined PPG-DaLiA, MIT-BIH, and WESAD datasets
 """
 
-import argparse
 import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset
 import numpy as np
-import random
-from pathlib import Path
 import json
-import yaml
-from typing import Dict, Any
-
-# Add src to path
+import pickle
+from pathlib import Path
+import time
 import sys
-sys.path.append(str(Path(__file__).parent / 'src'))
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
 
-from src.models.cnn_transformer_lite import CNNTransformerLite, create_model
-from src.training.trainer import MultiTaskTrainer
-from src.training.data_utils import create_data_loaders, load_processed_data
-from src.training.metrics import ModelEvaluator
-
-
-def set_seed(seed: int = 42):
-    """Set random seed for reproducibility"""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+# Import the CNN/Transformer-Lite model
+from src.models.cnn_transformer_lite import CNNTransformerLite
 
 
-def load_config(config_path: str) -> Dict[str, Any]:
-    """Load configuration from YAML file"""
-    with open(config_path, 'r') as f:
-        if config_path.endswith('.yaml') or config_path.endswith('.yml'):
-            return yaml.safe_load(f)
-        else:
-            return json.load(f)
-
-
-def create_model_from_config(config: Dict[str, Any]) -> torch.nn.Module:
-    """Create model from configuration"""
-    model_config = config['model']
+class MultimodalBiomedicalDataset(Dataset):
+    """Dataset for multimodal biomedical signals with proper label handling"""
     
-    if model_config['type'] == 'cnn_transformer_lite':
-        return CNNTransformerLite(
-            n_channels=model_config.get('n_channels', 11),
-            n_samples=model_config.get('n_samples', 1000),
-            d_model=model_config.get('d_model', 64),
-            nhead=model_config.get('nhead', 4),
-            num_layers=model_config.get('num_layers', 2),
-            dim_feedforward=model_config.get('dim_feedforward', 128),
-            dropout=model_config.get('dropout', 0.1),
-            task_configs=config['tasks']
-        )
-    else:
-        return create_model(model_config['type'], **model_config.get('params', {}))
-
-
-def main():
-    parser = argparse.ArgumentParser(description='Train multimodal biomedical monitoring model')
+    def __init__(self, data, task_configs):
+        self.data = data
+        self.task_configs = task_configs
+        
+        # Filter valid samples
+        self.valid_samples = []
+        for sample in data:
+            if 'window_data' in sample and sample['window_data'] is not None:
+                window_data = sample['window_data']
+                if hasattr(window_data, 'shape') and len(window_data.shape) == 2:
+                    self.valid_samples.append(sample)
+        
+        print(f"Valid samples: {len(self.valid_samples)}")
+        
+        # Analyze label distribution for each task
+        for task_name in task_configs.keys():
+            labels = []
+            for sample in self.valid_samples:
+                if task_name in sample.get('labels', {}):
+                    label = sample['labels'][task_name]
+                    if isinstance(label, (list, np.ndarray)) and len(label) > 0:
+                        class_idx = np.argmax(label)
+                        labels.append(class_idx)
+            
+            if labels:
+                unique_labels = set(labels)
+                print(f"Task {task_name}: {len(unique_labels)} unique classes")
+                print(f"  Distribution: {np.bincount(labels)}")
     
-    # Data arguments
-    parser.add_argument('--data_path', type=str, required=True,
-                       help='Path to processed dataset')
-    parser.add_argument('--config', type=str, default='configs/default_config.yaml',
-                       help='Path to configuration file')
+    def __len__(self):
+        return len(self.valid_samples)
     
-    # Training arguments
-    parser.add_argument('--epochs', type=int, default=100,
-                       help='Number of training epochs')
-    parser.add_argument('--batch_size', type=int, default=32,
-                       help='Batch size for training')
-    parser.add_argument('--learning_rate', type=float, default=1e-3,
-                       help='Learning rate')
-    parser.add_argument('--device', type=str, default='auto',
-                       help='Device to use for training (cpu, cuda, auto)')
-    
-    # Model arguments
-    parser.add_argument('--model_type', type=str, default='cnn_transformer_lite',
-                       help='Type of model to train')
-    parser.add_argument('--d_model', type=int, default=64,
-                       help='Model dimension for transformer')
-    parser.add_argument('--nhead', type=int, default=4,
-                       help='Number of attention heads')
-    parser.add_argument('--num_layers', type=int, default=2,
-                       help='Number of transformer layers')
-    
-    # Output arguments
-    parser.add_argument('--output_dir', type=str, default='outputs',
-                       help='Output directory for models and logs')
-    parser.add_argument('--experiment_name', type=str, default='multimodal_biomedical',
-                       help='Name of the experiment')
-    
-    # Other arguments
-    parser.add_argument('--seed', type=int, default=42,
-                       help='Random seed for reproducibility')
-    parser.add_argument('--resume', type=str, default=None,
-                       help='Path to checkpoint to resume from')
-    parser.add_argument('--eval_only', action='store_true',
-                       help='Only evaluate the model')
-    
-    args = parser.parse_args()
-    
-    # Set random seed
-    set_seed(args.seed)
-    
-    # Determine device
-    if args.device == 'auto':
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    else:
-        device = args.device
-    
-    print(f"🚀 Starting training with device: {device}")
-    print(f"📁 Data path: {args.data_path}")
-    print(f"⚙️  Config: {args.config}")
-    
-    # Load configuration
-    if Path(args.config).exists():
-        config = load_config(args.config)
-        print(f"✅ Loaded configuration from {args.config}")
-    else:
-        # Create default configuration
-        config = {
-            'model': {
-                'type': args.model_type,
-                'n_channels': 11,
-                'n_samples': 1000,
-                'd_model': args.d_model,
-                'nhead': args.nhead,
-                'num_layers': args.num_layers,
-                'dim_feedforward': 128,
-                'dropout': 0.1
-            },
-            'tasks': {
-                'activity': {'num_classes': 8, 'weight': 1.0},
-                'stress': {'num_classes': 4, 'weight': 1.0},
-                'arrhythmia': {'num_classes': 2, 'weight': 1.0}
-            },
-            'training': {
-                'epochs': args.epochs,
-                'batch_size': args.batch_size,
-                'learning_rate': args.learning_rate,
-                'loss_type': 'cross_entropy',
-                'optimizer_type': 'adamw',
-                'scheduler_type': 'cosine',
-                'weight_decay': 1e-4,
-                'warmup_epochs': 5
-            }
+    def __getitem__(self, idx):
+        sample = self.valid_samples[idx]
+        
+        # Get window data
+        window_data = sample['window_data']  # [11, 1000]
+        
+        # Convert to tensor and ensure proper shape
+        signals = torch.FloatTensor(window_data)
+        if signals.shape != (11, 1000):
+            signals = signals.view(11, 1000)
+        
+        # Get labels - convert one-hot to class indices
+        targets = {}
+        for task_name in self.task_configs.keys():
+            if task_name in sample.get('labels', {}):
+                label = sample['labels'][task_name]
+                if isinstance(label, (list, np.ndarray)) and len(label) > 0:
+                    class_idx = np.argmax(label)
+                    targets[task_name] = torch.LongTensor([class_idx])
+                else:
+                    targets[task_name] = torch.LongTensor([0])
+            else:
+                targets[task_name] = torch.LongTensor([0])
+        
+        return {
+            'signals': signals,
+            **targets
         }
-        print("⚠️  Using default configuration")
+
+
+def train_multimodal_model(data_path, epochs=10, batch_size=32, output_dir="training_results"):
+    """Comprehensive training function for multimodal biomedical monitoring"""
+    
+    print("Starting Multimodal Biomedical Training")
+    print(f"- Data path: {data_path}")
+    print(f"- Epochs: {epochs}")
+    print(f"- Batch size: {batch_size}")
     
     # Create output directory
-    output_dir = Path(args.output_dir) / args.experiment_name
+    output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Save configuration
-    with open(output_dir / 'config.json', 'w') as f:
-        json.dump(config, f, indent=2)
+    # Load data
+    print("\nLoading cleaned data...")
+    cleaned_data_path = "processed_unified_dataset/cleaned_unified_dataset.pkl"
+    with open(cleaned_data_path, 'rb') as f:
+        processed_data = pickle.load(f)
+    print(f"✅ Loaded {len(processed_data)} samples")
     
-    # Load processed data
-    print("📊 Loading processed data...")
-    try:
-        processed_data = load_processed_data(args.data_path)
-        print(f"✅ Loaded {len(processed_data)} samples")
-    except Exception as e:
-        print(f"❌ Error loading data: {e}")
-        return
+    # Create dataset
+    print("\nCreating dataset...")
+    task_configs = {
+        'activity': {'num_classes': 8, 'weight': 1.0},
+        'stress': {'num_classes': 4, 'weight': 1.0},
+        'arrhythmia': {'num_classes': 2, 'weight': 1.0}
+    }
+    
+    dataset = MultimodalBiomedicalDataset(processed_data, task_configs)
+    
+    # Create train/val/test split (60/20/20)
+    train_size = int(0.6 * len(dataset))
+    val_size = int(0.2 * len(dataset))
+    test_size = len(dataset) - train_size - val_size
+    
+    train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(
+        dataset, [train_size, val_size, test_size]
+    )
     
     # Create data loaders
-    print("🔄 Creating data loaders...")
-    data_loaders = create_data_loaders(
-        processed_data,
-        config['tasks'],
-        batch_size=config['training']['batch_size'],
-        num_workers=4,
-        augment_train=True
-    )
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     
-    if not data_loaders:
-        print("❌ No valid data loaders created")
-        return
-    
-    print(f"✅ Created data loaders: {list(data_loaders.keys())}")
+    print(f"\n✅ Train samples: {len(train_dataset)}")
+    print(f"✅ Val samples: {len(val_dataset)}")
+    print(f"✅ Test samples: {len(test_dataset)}")
     
     # Create model
-    print("🏗️  Creating model...")
-    model = create_model_from_config(config)
-    
-    # Print model info
-    total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"   Total parameters: {total_params:,}")
-    print(f"   Trainable parameters: {trainable_params:,}")
-    
-    # Create trainer
-    print("🎯 Initializing trainer...")
-    trainer = MultiTaskTrainer(
-        model=model,
-        task_configs=config['tasks'],
-        device=device,
-        loss_type=config['training']['loss_type'],
-        optimizer_type=config['training']['optimizer_type'],
-        learning_rate=config['training']['learning_rate'],
-        weight_decay=config['training']['weight_decay'],
-        scheduler_type=config['training']['scheduler_type'],
-        warmup_epochs=config['training']['warmup_epochs'],
-        save_dir=str(output_dir / 'checkpoints'),
-        log_dir=str(output_dir / 'logs')
+    print("\nCreating CNN/Transformer-Lite model...")
+    model = CNNTransformerLite(
+        n_channels=11,
+        n_samples=1000,
+        d_model=64,
+        nhead=4,
+        num_layers=2,
+        dim_feedforward=128,
+        dropout=0.1,
+        task_configs=task_configs
     )
     
-    # Resume from checkpoint if specified
-    if args.resume:
-        print(f"📂 Resuming from checkpoint: {args.resume}")
-        trainer.load_checkpoint(args.resume)
+    # Use CPU for stability (MPS has bus error issues on some M2 Macs)
+    device = 'cpu'
     
-    if not args.eval_only:
-        # Train model
-        print("🚀 Starting training...")
-        training_history = trainer.train(
-            train_loader=data_loaders['train'],
-            val_loader=data_loaders['val'],
-            epochs=config['training']['epochs'],
-            save_best=True,
-            patience=20
-        )
+    model.to(device)
+    
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"- Model created with {total_params:,} parameters")
+    print(f"- Using device: {device}")
+    
+    # Create loss function and optimizer with lower learning rate
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=1e-6)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    
+    # Training loop
+    print(f"\n\x1b[32mStarting training for {epochs} epochs...\x1b[0m")
+    
+    training_history = {
+        'train_loss': [],
+        'val_loss': [],
+        'train_accuracy': [],
+        'val_accuracy': [],
+        'epoch_times': []
+    }
+    
+    for epoch in range(epochs):
+        epoch_start_time = time.time()
+        print(f"\n\x1b[32m--- Epoch {epoch+1}/{epochs} ---\x1b[0m")
         
-        # Save training history
-        with open(output_dir / 'training_history.json', 'w') as f:
-            # Convert numpy arrays to lists for JSON serialization
-            history_serializable = {}
-            for key, value in training_history.items():
-                if isinstance(value, list) and len(value) > 0:
-                    if isinstance(value[0], dict):
-                        # Handle metrics dictionaries
-                        history_serializable[key] = value
-                    else:
-                        # Handle simple lists
-                        history_serializable[key] = [float(v) if isinstance(v, (int, float, np.number)) else v for v in value]
-                else:
-                    history_serializable[key] = value
-            json.dump(history_serializable, f, indent=2)
+        # Training phase
+        model.train()
+        train_loss = 0.0
+        train_correct = 0
+        train_total = 0
+        train_batches = 0
         
-        print("✅ Training completed!")
-    
-    # Evaluate model
-    if 'test' in data_loaders:
-        print("🔍 Evaluating model...")
-        test_metrics = trainer.evaluate(data_loaders['test'])
+        for batch_idx, batch in enumerate(train_loader):
+            try:
+                # Move batch to device
+                signals = batch['signals'].to(device)
+                targets = {task: batch[task].to(device) for task in task_configs.keys()}
+                
+                # Forward pass
+                optimizer.zero_grad()
+                predictions = model(signals)
+                
+                # Calculate loss for each task with NaN checks
+                total_loss = 0.0
+                valid_tasks = 0
+                for task_name in task_configs.keys():
+                    if task_name in predictions and task_name in targets:
+                        pred = predictions[task_name]
+                        target = targets[task_name].squeeze()
+                        
+                        # Check for NaN in predictions
+                        if torch.isnan(pred).any() or torch.isinf(pred).any():
+                            print(f"⚠️  NaN/Inf in {task_name} predictions, skipping batch")
+                            continue
+                            
+                        loss = criterion(pred, target)
+                        if not torch.isnan(loss) and not torch.isinf(loss) and loss.item() > 0:
+                            total_loss += loss
+                            valid_tasks += 1
+                
+                # Skip if no valid losses
+                if valid_tasks == 0:
+                    continue
+                
+                # Backward pass with better gradient clipping
+                total_loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
+                optimizer.step()
+                
+                # Calculate accuracy
+                train_loss += total_loss.item()
+                train_batches += 1
+                
+                # Count correct predictions for each task
+                for task_name in task_configs.keys():
+                    if task_name in predictions and task_name in targets:
+                        pred_classes = torch.argmax(predictions[task_name], dim=1)
+                        correct = (pred_classes == targets[task_name].squeeze()).sum().item()
+                        train_correct += correct
+                        train_total += targets[task_name].size(0)
+                
+                # Progress update every 200 batches
+                if batch_idx % 200 == 0:
+                    print(f"  Batch {batch_idx}/{len(train_loader)} - Loss: {total_loss.item():.4f}")
+                    
+            except Exception as e:
+                print(f"⚠️  Error in batch {batch_idx}: {e}")
+                if device == 'mps':
+                    print("🔄 Switching to CPU due to MPS error...")
+                    device = 'cpu'
+                    model.to(device)
+                continue
         
-        # Save test results
-        with open(output_dir / 'test_results.json', 'w') as f:
-            json.dump(test_metrics, f, indent=2)
+        # Validation phase
+        model.eval()
+        val_loss = 0.0
+        val_correct = 0
+        val_total = 0
         
-        print("✅ Evaluation completed!")
+        with torch.no_grad():
+            for batch in val_loader:
+                try:
+                    signals = batch['signals'].to(device)
+                    targets = {task: batch[task].to(device) for task in task_configs.keys()}
+                    
+                    predictions = model(signals)
+                    
+                    # Calculate loss for each task
+                    batch_loss = 0.0
+                    valid_tasks = 0
+                    for task_name in task_configs.keys():
+                        if task_name in predictions and task_name in targets:
+                            loss = criterion(predictions[task_name], targets[task_name].squeeze())
+                            if not torch.isnan(loss) and not torch.isinf(loss):
+                                batch_loss += loss
+                                valid_tasks += 1
+                    
+                    if valid_tasks > 0:
+                        val_loss += batch_loss.item()
+                        
+                        # Count correct predictions
+                        for task_name in task_configs.keys():
+                            if task_name in predictions and task_name in targets:
+                                pred_classes = torch.argmax(predictions[task_name], dim=1)
+                                correct = (pred_classes == targets[task_name].squeeze()).sum().item()
+                                val_correct += correct
+                                val_total += targets[task_name].size(0)
+                except Exception as e:
+                    print(f"⚠️  Error in validation batch: {e}")
+                    continue
+        
+        
+        # Calculate metrics
+        avg_train_loss = train_loss / max(train_batches, 1)
+        avg_val_loss = val_loss / max(len(val_loader), 1)
+        train_accuracy = train_correct / max(train_total, 1)
+        val_accuracy = val_correct / max(val_total, 1)
+        
+        # Calculate epoch time
+        epoch_time = time.time() - epoch_start_time
+        
+        # Store history
+        training_history['train_loss'].append(avg_train_loss)
+        training_history['val_loss'].append(avg_val_loss)
+        training_history['train_accuracy'].append(train_accuracy)
+        training_history['val_accuracy'].append(val_accuracy)
+        training_history['epoch_times'].append(epoch_time)
+        
+        # Print results
+        print(f"- Epoch time: {epoch_time:.1f}s")
+        print(f"- \033[1mTrain     \033[0m: Loss = {avg_train_loss:.4f} | Accuracy = {train_accuracy:.2%}")
+        print(f"- \033[1mValidation\033[0m: Loss = {avg_val_loss:.4f} | Accuracy = {val_accuracy:.2%}")
+        print(f"⚡ \033[1mSpeed\033[0m: {len(train_loader)/epoch_time:.1f} batches/sec")
+        
+        # Update learning rate
+        scheduler.step()
     
-    # Benchmark model
-    print("⚡ Benchmarking model performance...")
-    benchmark_results = trainer.benchmark_model()
+    # Test evaluation
+    print(f"\nEvaluating on Test Set...")
+    model.eval()
+    test_loss = 0.0
+    test_correct = 0
+    test_total = 0
+    test_batches = 0
     
-    # Save benchmark results
-    with open(output_dir / 'benchmark_results.json', 'w') as f:
-        json.dump(benchmark_results, f, indent=2)
+    with torch.no_grad():
+        for batch in test_loader:
+            signals = batch['signals'].to(device)
+            targets = {task: batch[task].to(device) for task in task_configs.keys()}
+            
+            predictions = model(signals)
+            
+            # Calculate loss for each task
+            batch_loss = 0.0
+            valid_tasks = 0
+            for task_name in task_configs.keys():
+                if task_name in predictions and task_name in targets:
+                    loss = criterion(predictions[task_name], targets[task_name].squeeze())
+                    if not torch.isnan(loss) and not torch.isinf(loss):
+                        batch_loss += loss
+                        valid_tasks += 1
+            
+            if valid_tasks > 0:
+                test_loss += batch_loss.item()
+                test_batches += 1
+                
+                # Count correct predictions
+                for task_name in task_configs.keys():
+                    if task_name in predictions and task_name in targets:
+                        pred_classes = torch.argmax(predictions[task_name], dim=1)
+                        correct = (pred_classes == targets[task_name].squeeze()).sum().item()
+                        test_correct += correct
+                        test_total += targets[task_name].size(0)
     
-    print("✅ Benchmarking completed!")
+    # Calculate final metrics
+    final_train_acc = training_history['train_accuracy'][-1]
+    final_val_acc = training_history['val_accuracy'][-1]
+    final_test_acc = test_correct / max(test_total, 1)
     
-    # Export for deployment
-    print("📦 Exporting model for deployment...")
-    deployment_files = trainer.export_for_deployment(str(output_dir / 'deployment'))
+    print(f"\n✅ Training completed!")
+    print(f"- Final Train Accuracy: {final_train_acc:.2%}")
+    print(f"- Final Val Accuracy: {final_val_acc:.2%}")
+    print(f"\033[92m- Final Test Accuracy: {final_test_acc:.2%}\033[0m")
     
-    print("✅ Deployment export completed!")
+    # Save results
+    results = {
+        'training_history': training_history,
+        'final_metrics': {
+            'train_accuracy': final_train_acc,
+            'val_accuracy': final_val_acc,
+            'test_accuracy': final_test_acc,
+            'total_parameters': total_params,
+            'model_size_mb': total_params * 4 / (1024 * 1024)
+        }
+    }
     
-    # Print summary
-    print(f"\n🎉 Training pipeline completed!")
-    print(f"📁 Output directory: {output_dir}")
-    print(f"📊 Checkpoints: {output_dir / 'checkpoints'}")
-    print(f"📈 Logs: {output_dir / 'logs'}")
-    print(f"🚀 Deployment files: {output_dir / 'deployment'}")
+    # Save to file
+    with open(output_dir / 'training_results.json', 'w') as f:
+        json.dump(results, f, indent=2, default=str)
     
-    if 'test' in data_loaders:
-        print(f"\n📊 Test Results Summary:")
-        for task_name, task_metrics in test_metrics.items():
-            print(f"  {task_name.title()}:")
-            print(f"    Accuracy: {task_metrics['accuracy']:.4f}")
-            print(f"    F1-Score: {task_metrics['f1_weighted']:.4f}")
-            print(f"    AUC: {task_metrics['auc']:.4f}")
+    # Save model
+    torch.save(model.state_dict(), output_dir / 'model.pth')
     
-    print(f"\n⚡ Performance Summary:")
-    print(f"  Model Size: {benchmark_results['model_size_mb']:.2f} MB")
-    print(f"  Parameters: {benchmark_results['total_parameters']:,}")
-    print(f"  Inference Time: {benchmark_results['mean_time_ms']:.2f} ms")
+    print(f"Results saved to: {output_dir}") 
+    
+    return results
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Multimodal biomedical training')
+    parser.add_argument('--data_path', type=str, 
+                       default='processed_unified_dataset/unified_dataset.pkl',
+                       help='Path to processed dataset')
+    parser.add_argument('--epochs', type=int, default=10,
+                       help='Number of training epochs')
+    parser.add_argument('--batch_size', type=int, default=32,
+                       help='Batch size for training')
+    parser.add_argument('--output_dir', type=str, default='training_results',
+                       help='Output directory for results')
+    
+    args = parser.parse_args()
+    
+    results = train_multimodal_model(
+        data_path=args.data_path,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        output_dir=args.output_dir
+    )

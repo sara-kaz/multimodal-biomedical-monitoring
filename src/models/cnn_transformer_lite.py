@@ -156,7 +156,7 @@ class CNNTransformerLite(nn.Module):
         self.cnn_layers = self._build_cnn_layers()
         
         # Channel projection to transformer dimension
-        self.channel_projection = nn.Linear(n_channels * 32, d_model)
+        self.channel_projection = nn.Linear(32, d_model)
         
         # Positional encoding
         self.pos_encoding = PositionalEncoding(d_model, n_samples)
@@ -215,16 +215,19 @@ class CNNTransformerLite(nn.Module):
         )
     
     def _init_weights(self):
-        """Initialize model weights"""
+        """Initialize model weights with better initialization"""
         for module in self.modules():
             if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
+                nn.init.xavier_normal_(module.weight, gain=0.1)  # Smaller gain
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0)
             elif isinstance(module, nn.Conv1d):
                 nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0)
+            elif isinstance(module, nn.LayerNorm):
+                nn.init.constant_(module.bias, 0)
+                nn.init.constant_(module.weight, 1.0)
     
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
@@ -247,9 +250,7 @@ class CNNTransformerLite(nn.Module):
         
         # Project to transformer dimension
         # [batch_size, 250, 32] -> [batch_size, 250, d_model]
-        projected = self.channel_projection(
-            cnn_features.reshape(batch_size, 250, -1)
-        )
+        projected = self.channel_projection(cnn_features)
         
         # Add positional encoding
         pos_encoded = self.pos_encoding(projected)

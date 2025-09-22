@@ -1,0 +1,54 @@
+{
+  "training_history": {
+    "train_loss": [
+      0.004276381925339216,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "val_loss": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "train_accuracy": [
+      0.020833333333333332,
+      0,
+      0,
+      0,
+      0
+    ],
+    "val_accuracy": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "psnr_scores": [
+      NaN,
+      NaN,
+      NaN,
+      NaN,
+      NaN
+    ],
+    "epoch_times": [
+      28.614919900894165,
+      14.956417083740234,
+      14.410795211791992,
+      14.967390298843384,
+      15.082606077194214
+    ]
+  },
+  "final_metrics": {
+    "train_accuracy": 0,
+    "val_accuracy": 0,
+    "test_accuracy": 0,
+    "final_psnr": NaN,
+    "total_parameters": 82862,
+    "model_size_mb": 0.31609344482421875
+  }
+}
